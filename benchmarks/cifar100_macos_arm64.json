@@ -1,0 +1,40 @@
+{
+  "dataset": "CIFAR-100 DINOv2 embeddings",
+  "components": 99,
+  "method": "simpls",
+  "classifier": "lda",
+  "backend": "Apple Accelerate",
+  "repetitions": 7,
+  "records": [
+    {
+      "precision": "single",
+      "medianSeconds": 0.20760391666666667,
+      "iqrSeconds": 0.0023016249999999738,
+      "accuracy": 0.8687,
+      "replicateSeconds": [
+        0.2592405,
+        0.20856616666666666,
+        0.20609420833333333,
+        0.20526941666666668,
+        0.20836779166666666,
+        0.20760391666666667,
+        0.20657716666666667
+      ]
+    },
+    {
+      "precision": "double",
+      "medianSeconds": 0.28129945833333331,
+      "iqrSeconds": 0.0027968645833333361,
+      "accuracy": 0.8687,
+      "replicateSeconds": [
+        0.28050795833333331,
+        0.28232495833333332,
+        0.27908704166666665,
+        0.28056425,
+        0.28129945833333331,
+        0.28365020833333332,
+        0.28404408333333331
+      ]
+    }
+  ]
+}

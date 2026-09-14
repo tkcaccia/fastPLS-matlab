@@ -1,0 +1,10 @@
+*.mex*
+*.o
+*.obj
+*.dSYM/
+build/
+private/
+slprj/
+codegen/
+*.asv
+*.m~

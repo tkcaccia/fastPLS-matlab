@@ -1,0 +1,16 @@
+name: MATLAB
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: matlab-actions/setup-matlab@v2
+      - name: Build and test
+        uses: matlab-actions/run-command@v2
+        with:
+          command: build_fastpls; addpath('tests'); run_tests
