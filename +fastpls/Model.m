@@ -4,14 +4,14 @@ classdef Model < handle
         NumComponents = 2
         Method = "simpls"
         Classifier = ""
-        Scaling = "autoscaling"
+        Scaling = "centering"
         Backend = "cpu"
         Oversample = 32
         Power = 5
         Seed = 1
         OrthogonalComponents = 1
         Kernel = "linear"
-        Gamma = 1
+        Gamma = []
         Degree = 3
         Offset = 1
         StoreScores = false
@@ -31,14 +31,14 @@ classdef Model < handle
                 options.NumComponents = 2
                 options.Method = "simpls"
                 options.Classifier = ""
-                options.Scaling = "autoscaling"
+                options.Scaling = "centering"
                 options.Backend = "cpu"
                 options.Oversample = 32
                 options.Power = 5
                 options.Seed = 1
                 options.OrthogonalComponents = 1
                 options.Kernel = "linear"
-                options.Gamma = 1
+                options.Gamma = []
                 options.Degree = 3
                 options.Offset = 1
                 options.StoreScores = false
@@ -57,11 +57,22 @@ classdef Model < handle
             X = obj.numericMatrix(X, "X");
             obj.NumPredictors = size(X, 2);
             obj.Precision = string(class(X));
+            obj.validateControls();
+            method = obj.textChoice(obj.Method, "Method", ...
+                ["simpls", "plssvd", "pls-svd", "opls", ...
+                 "kernelpls", "kernel-pls"]);
+            scaling = obj.textChoice(obj.Scaling, "Scaling", ...
+                ["none", "centering", "center", ...
+                 "autoscaling", "scale"]);
+            kernel = obj.textChoice(obj.Kernel, "Kernel", ...
+                ["linear", "rbf", "radial_basis", ...
+                 "polynomial", "poly"]);
             if strlength(string(obj.Classifier)) > 0
                 if ~isvector(Y), error("fastPLS:InvalidLabels", "Labels must be a vector."); end
                 [obj.Classes, ~, encoded] = unique(Y(:), "stable");
                 Ynative = int32(encoded - 1);
-                classifier = lower(string(obj.Classifier));
+                classifier = obj.textChoice(obj.Classifier, "Classifier", ...
+                    ["argmax", "lda"]);
             else
                 obj.Classes = [];
                 Ynative = cast(obj.numericMatrix(Y, "Y"), "like", X);
@@ -70,15 +81,17 @@ classdef Model < handle
             if size(Ynative, 1) ~= size(X, 1)
                 error("fastPLS:DimensionMismatch", "X and Y rows differ.");
             end
+            gamma = obj.Gamma;
+            if isempty(gamma), gamma = 1 / obj.NumPredictors; end
             controls = struct("components", obj.NumComponents, ...
-                "method", char(lower(string(obj.Method))), ...
+                "method", char(method), ...
                 "classifier", char(classifier), ...
-                "scaling", char(lower(string(obj.Scaling))), ...
+                "scaling", char(scaling), ...
                 "oversample", obj.Oversample, "power", obj.Power, ...
                 "seed", obj.Seed, ...
                 "orthogonalComponents", obj.OrthogonalComponents, ...
-                "kernel", char(lower(string(obj.Kernel))), ...
-                "gamma", obj.Gamma, "degree", obj.Degree, ...
+                "kernel", char(kernel), ...
+                "gamma", gamma, "degree", obj.Degree, ...
                 "offset", obj.Offset, "storeScores", obj.StoreScores);
             [obj.NativeHandle, obj.NumComponentsFitted] = ...
                 fastpls_mex('new', X, Ynative, controls);
@@ -96,6 +109,11 @@ classdef Model < handle
             else
                 top = options.Top;
                 if isempty(top), top = 1; end
+                obj.positiveInteger(top, "Top");
+                if top > numel(obj.Classes)
+                    error("fastPLS:InvalidTop", ...
+                        "Top cannot exceed the number of classes.");
+                end
                 indices = fastpls_mex('classes', obj.handle(), X, top);
                 prediction = obj.Classes(indices);
                 if top == 1, prediction = prediction(:, 1); end
@@ -103,6 +121,14 @@ classdef Model < handle
         end
         function values = predictScores(obj, X)
             values = fastpls_mex('scores', obj.handle(), obj.predictionMatrix(X));
+        end
+        function values = predictResponses(obj, X)
+            %PREDICTRESPONSES Return continuous response or class-indicator scores.
+            values = fastpls_mex('predict', obj.handle(), obj.predictionMatrix(X));
+        end
+        function values = vip(obj)
+            %VIP Return variable-importance paths for a score-retaining model.
+            values = fastpls_mex('vip', obj.handle());
         end
         function delete(obj), obj.release(); end
     end
@@ -117,6 +143,24 @@ classdef Model < handle
                 obj.NativeHandle = uint64(0);
             end
         end
+        function validateControls(obj)
+            obj.positiveInteger(obj.NumComponents, "NumComponents");
+            obj.positiveInteger(obj.Oversample, "Oversample");
+            obj.nonnegativeInteger(obj.Power, "Power");
+            obj.nonnegativeInteger(obj.Seed, "Seed");
+            obj.nonnegativeInteger(obj.OrthogonalComponents, ...
+                "OrthogonalComponents");
+            obj.positiveInteger(obj.Degree, "Degree");
+            if ~isempty(obj.Gamma) && (~isscalar(obj.Gamma) || ...
+                    ~isfinite(obj.Gamma) || obj.Gamma <= 0)
+                error("fastPLS:InvalidGamma", ...
+                    "Gamma must be finite and positive.");
+            end
+            if ~isscalar(obj.Offset) || ~isfinite(obj.Offset)
+                error("fastPLS:InvalidControl", ...
+                    "Offset must be a finite scalar.");
+            end
+        end
         function X = predictionMatrix(obj, X)
             X = cast(obj.numericMatrix(X, "X"), obj.Precision);
             if size(X, 2) ~= obj.NumPredictors
@@ -125,11 +169,30 @@ classdef Model < handle
         end
     end
     methods (Static, Access = private)
+        function positiveInteger(value, name)
+            if ~isscalar(value) || ~isfinite(value) || value < 1 || fix(value) ~= value
+                error("fastPLS:InvalidControl", ...
+                    "%s must be a positive integer.", name);
+            end
+        end
+        function nonnegativeInteger(value, name)
+            if ~isscalar(value) || ~isfinite(value) || value < 0 || fix(value) ~= value
+                error("fastPLS:InvalidControl", ...
+                    "%s must be a non-negative integer.", name);
+            end
+        end
         function X = numericMatrix(X, name)
             if ~isnumeric(X) || ~ismatrix(X) || ~isreal(X) || any(~isfinite(X), "all")
                 error("fastPLS:InvalidMatrix", "%s must be a finite real matrix.", name);
             end
             if ~isa(X, "single") && ~isa(X, "double"), X = double(X); end
+        end
+        function value = textChoice(value, name, allowed)
+            value = lower(string(value));
+            if ~isscalar(value) || ~ismember(value, allowed)
+                error("fastPLS:InvalidControl", ...
+                    "%s has an unsupported value.", name);
+            end
         end
     end
 end

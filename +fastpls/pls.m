@@ -7,17 +7,20 @@ arguments
     options.NumComponents = 2
     options.Method = "simpls"
     options.Classifier = ""
-    options.Scaling = "autoscaling"
+    options.Scaling = "centering"
     options.Backend = "cpu"
     options.Oversample = 32
     options.Power = 5
     options.Seed = 1
     options.OrthogonalComponents = 1
     options.Kernel = "linear"
-    options.Gamma = 1
+    options.Gamma = []
     options.Degree = 3
     options.Offset = 1
     options.StoreScores = false
+    options.YTest = []
+    options.Top = []
+    options.ByColumn (1, 1) logical = false
 end
 model = fastpls.Model( ...
     NumComponents=options.NumComponents, ...
@@ -38,6 +41,18 @@ model.fit(Xtrain, Ytrain);
 if isempty(Xtest)
     output = model;
 else
-    output = struct("Model", model, "Prediction", model.predict(Xtest));
+    prediction = model.predict(Xtest, Top=options.Top);
+    output = struct("Model", model, "Prediction", prediction);
+    if ~isempty(options.YTest)
+        if isempty(model.Classes)
+            output.Metrics = fastpls.evaluate( ...
+                options.YTest, prediction, YTrain=Ytrain, ...
+                ByColumn=options.ByColumn);
+        else
+            output.Metrics = fastpls.evaluate( ...
+                string(options.YTest), string(prediction), ...
+                ByColumn=options.ByColumn);
+        end
+    end
 end
 end

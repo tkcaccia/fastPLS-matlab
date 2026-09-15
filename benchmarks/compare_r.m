@@ -1,8 +1,9 @@
-function report = compare_r(rLibrary, repetitions)
+function report = compare_r(rLibrary, repetitions, precision)
 %COMPARE_R Compare MATLAB and R wrappers under identical controls.
 arguments
     rLibrary = "/tmp/fastPLS-r-lib"
     repetitions = 11
+    precision = "double"
 end
 root = fileparts(fileparts(mfilename("fullpath")));
 temporary = string(tempname);
@@ -22,13 +23,25 @@ Xtrain = X(1:1800, :);
 Xtest = X(1801:end, :);
 Ytrain = Y(1:1800, :);
 labels = "class-" + string(classIndex(1:1800));
+precision = lower(string(precision));
+if precision == "single"
+    Xtrain = single(Xtrain);
+    Xtest = single(Xtest);
+    Ytrain = single(Ytrain);
+    rPrecision = "float32";
+elseif precision == "double"
+    rPrecision = "float64";
+else
+    error("fastPLS:InvalidPrecision", ...
+        "Precision must be 'single' or 'double'.");
+end
 writematrix(Xtrain, fullfile(temporary, "Xtrain.csv"));
 writematrix(Xtest, fullfile(temporary, "Xtest.csv"));
 writematrix(Ytrain, fullfile(temporary, "Ytrain.csv"));
 writelines(labels, fullfile(temporary, "labels.txt"));
 script = fullfile(root, "benchmarks", "compare_r.R");
-command = sprintf('Rscript "%s" "%s" "%s" "%s" %d', ...
-    script, temporary, temporary, rLibrary, repetitions);
+command = sprintf('Rscript "%s" "%s" "%s" "%s" %d "%s"', ...
+    script, temporary, temporary, rLibrary, repetitions, rPrecision);
 [status, output] = system(command);
 if status ~= 0, error("fastPLS:RBenchmark", "%s", output); end
 records = struct([]);
@@ -37,6 +50,7 @@ for method = ["simpls", "plssvd", "opls", "kernelpls"]
     for iteration = 1:repetitions
         started = tic;
         fit = fastpls.Model(NumComponents=8, Method=method, Seed=17, ...
+            Scaling="centering", ...
             Kernel="rbf", Gamma=0.1, OrthogonalComponents=1);
         fit.fit(Xtrain, Ytrain);
         prediction = fit.predict(Xtest);
@@ -45,7 +59,8 @@ for method = ["simpls", "plssvd", "opls", "kernelpls"]
     rPrediction = readmatrix(fullfile(temporary, "r_" + method + "_regression.csv"), ...
         NumHeaderLines=1);
     classification = fastpls.Model(NumComponents=8, Method=method, ...
-        Classifier="lda", Seed=17, Kernel="rbf", Gamma=0.1, ...
+        Classifier="lda", Scaling="centering", Seed=17, ...
+        Kernel="rbf", Gamma=0.1, ...
         OrthogonalComponents=1);
     classification.fit(Xtrain, labels);
     matlabLabels = classification.predict(Xtest);
@@ -60,8 +75,9 @@ for method = ["simpls", "plssvd", "opls", "kernelpls"]
     records(end).rSeconds = str2double(strtrim(fileread(fullfile(temporary, ...
         "r_" + method + "_seconds.txt"))));
 end
-report = struct("fastPLSRVersion", "0.99.66", ...
-    "coreCommit", "3854e369c1f0cd615e58b968b7721efb4b2a3146", ...
-    "repetitions", repetitions, "records", records);
+metadata = jsondecode(fileread(fullfile(root, "UPSTREAM_CORE.json")));
+report = struct("fastPLSRVersion", strtrim(fileread(fullfile(temporary, ...
+    "r_version.txt"))), "coreCommit", string(metadata.commit), ...
+    "repetitions", repetitions, "precision", precision, "records", records);
 fprintf("%s\n", jsonencode(report, PrettyPrint=true));
 end

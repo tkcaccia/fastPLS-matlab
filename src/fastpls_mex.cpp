@@ -5,10 +5,12 @@
 #include <fastpls/core.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -194,6 +196,7 @@ class ModelBase {
   virtual mxArray* predict(const mxArray* input) const = 0;
   virtual mxArray* scores(const mxArray* input) const = 0;
   virtual mxArray* classes(const mxArray* input, std::size_t top) const = 0;
+  virtual mxArray* vip() const = 0;
   virtual std::size_t components() const = 0;
   virtual bool is_single() const = 0;
 };
@@ -259,6 +262,79 @@ class Model final : public ModelBase {
       for (std::size_t rank = 0; rank < top; ++rank) {
         destination[row + rank * values.rows()] =
             static_cast<std::int64_t>(order[rank] + 1);
+      }
+    }
+    return output;
+  }
+
+  mxArray* vip() const override {
+    const core::Matrix<T>* scores = nullptr;
+    const core::Matrix<T>* weights = nullptr;
+    const core::Matrix<T>* loadings = nullptr;
+    if (family_ == Family::simpls) {
+      const auto& model = std::get<core::SimplsModel<T>>(model_);
+      scores = &model.scores;
+      weights = &model.weights;
+      loadings = &model.response_loadings;
+    } else if (family_ == Family::plssvd) {
+      const auto& model = std::get<core::PlssvdModel<T>>(model_);
+      scores = &model.scores;
+      weights = &model.weights;
+      loadings = &model.response_loadings;
+    } else if (family_ == Family::opls) {
+      const auto& model = std::get<core::OplsModel<T>>(model_).inner;
+      scores = &model.scores;
+      weights = &model.weights;
+      loadings = &model.response_loadings;
+    } else {
+      const auto& model = std::get<core::KernelPlsModel<T>>(model_).inner;
+      scores = &model.scores;
+      weights = &model.weights;
+      loadings = &model.response_loadings;
+    }
+    if (scores->size() == 0) {
+      throw std::invalid_argument(
+          "VIP requires a model fitted with StoreScores=true");
+    }
+    const std::size_t components = weights->columns();
+    const std::size_t predictors = weights->rows();
+    mxArray* output = loadings->rows() == 1 ? nullptr :
+        mxCreateCellMatrix(1, static_cast<mwSize>(loadings->rows()));
+    for (std::size_t response = 0; response < loadings->rows(); ++response) {
+      mxArray* value = mxCreateDoubleMatrix(
+          static_cast<mwSize>(components), static_cast<mwSize>(predictors), mxREAL);
+      double* destination = mxGetPr(value);
+      std::vector<long double> numerator(predictors, 0.0L);
+      long double denominator = 0.0L;
+      for (std::size_t component = 0; component < components; ++component) {
+        long double score_square = 0.0L;
+        long double weight_square = 0.0L;
+        for (std::size_t row = 0; row < scores->rows(); ++row) {
+          const long double current = (*scores)(row, component);
+          score_square += current * current;
+        }
+        for (std::size_t row = 0; row < predictors; ++row) {
+          const long double current = (*weights)(row, component);
+          weight_square += current * current;
+        }
+        const long double loading = (*loadings)(response, component);
+        const long double explained = loading * loading * score_square;
+        denominator += explained;
+        for (std::size_t predictor = 0; predictor < predictors; ++predictor) {
+          const long double weight = (*weights)(predictor, component);
+          if (weight_square > 0.0L) {
+            numerator[predictor] += weight * weight * explained / weight_square;
+          }
+          destination[component + predictor * components] = denominator > 0.0L ?
+              std::sqrt(static_cast<double>(
+                  predictors * numerator[predictor] / denominator)) :
+              std::numeric_limits<double>::quiet_NaN();
+        }
+      }
+      if (loadings->rows() == 1) {
+        output = value;
+      } else {
+        mxSetCell(output, static_cast<mwIndex>(response), value);
       }
     }
     return output;
@@ -743,6 +819,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
       models.erase(model);
       delete model;
       mexUnlock();
+      return;
+    }
+    if (command == "vip") {
+      if (nrhs != 2 || nlhs != 1) {
+        throw std::invalid_argument("vip requires a fitted model handle");
+      }
+      plhs[0] = handle_value(prhs[1])->vip();
       return;
     }
     if (command == "predict" || command == "scores" || command == "classes") {

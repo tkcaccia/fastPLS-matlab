@@ -35,8 +35,24 @@ prediction = model.predict(X(151:end, :));
 metrics = fastpls.evaluate(y(151:end), prediction);
 ```
 
-For classification, set `Classifier="argmax"` or `Classifier="lda"`.
+For classification, set `Classifier="argmax"` or `Classifier="lda"`. Numeric
+responses are treated as regression unless a classifier is requested explicitly.
 `model.predict(X, Top=5)` returns five ranked labels per observation.
+
+The MATLAB interface also exposes component selection, nested validation,
+permutation testing, and VIP trajectories:
+
+```matlab
+selected = fastpls.plsSingleCV(X, labels, NumComponents=1:4, ...
+    Classifier="lda", Selection="balanced_accuracy", KFold=5, Seed=7);
+nested = fastpls.plsDoubleCV(X, labels, NumComponents=1:4, ...
+    Classifier="lda", Selection="balanced_accuracy", ...
+    InnerFolds=5, OuterFolds=5, PermutationTest=true, Times=100, Seed=7);
+```
+
+`Constrain=` keeps observations from the same exchangeability group together
+in validation and permutes equal-sized groups as intact blocks. Monte Carlo
+permutation p-values use the `(extreme + 1) / (completed + 1)` correction.
 
 ## Validation
 
@@ -49,11 +65,13 @@ compare_r('/tmp/fastPLS-r-lib', 11)
 ```
 
 On the macOS arm64 validation run, all four MATLAB estimators were compared
-with fastPLS R under identical controls. The maximum absolute prediction
-difference was `1.55e-15`, and LDA labels agreed for every held-out sample.
+with fastPLS R under identical controls. Maximum absolute prediction
+differences were below `5e-16` in double precision and `2.5e-7` in single
+precision; LDA labels agreed for every held-out sample in both precisions.
 CIFAR-100 SIMPLS-LDA with 99 components took 0.208 seconds in `single` and
 0.281 seconds in `double`; accuracy was 0.8687 in both precisions. The matched
 R medians were 0.197 and 0.365 seconds, respectively.
+See `VALIDATION.md` for the exact test scope and current limitations.
 
 The CIFAR-100 result can be regenerated from the same column-major binary
 matrices used by the R benchmark:
@@ -65,9 +83,9 @@ benchmark_cifar100('/path/to/cifar100/binaries', 7)
 
 ## Backend status
 
-Version 0.1.0 validates the shared CPU core. CUDA and Metal requests fail
+Version 0.2.0 validates the shared CPU core. CUDA and Metal requests fail
 explicitly rather than silently falling back to CPU. MATLAB accelerator
-adapters are not part of this initial release.
+adapters are not part of this release.
 
 ## License
 
