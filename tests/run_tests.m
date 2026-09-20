@@ -54,6 +54,19 @@ centeredModel = fastpls.Model( ...
     NumComponents=2, Scaling="centering", Seed=19);
 centeredModel.fit(X, Y);
 assert(isequal(defaultModel.predict(X), centeredModel.predict(X)));
+for precision = precisions
+    constantX = cast(randn(41, 30), precision);
+    for constantValue = [0, 2.5]
+        constantModel = fastpls.Model(NumComponents=10, Seed=20261542);
+        constantModel.fit(constantX, ...
+            cast(repmat(constantValue, 41, 1), precision));
+        constantPrediction = constantModel.predict(constantX(1:7, :));
+        assert(constantModel.NumComponents == 10);
+        assert(constantModel.NumComponentsFitted == 0);
+        assert(isequal(size(constantPrediction), [7, 1]));
+        assert(all(constantPrediction == cast(constantValue, precision), "all"));
+    end
+end
 defaultKernel = fastpls.Model( ...
     NumComponents=2, Method="kernelpls", Kernel="rbf", Seed=23);
 defaultKernel.fit(X, Y);

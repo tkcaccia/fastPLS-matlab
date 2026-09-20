@@ -2,8 +2,10 @@
 
 `fastPLS-matlab` is a MATLAB interface to the same MIT-licensed C++17 core
 used by the [`fastPLS`](https://github.com/tkcaccia/fastPLS) R package. It
-supports `single` and `double` execution for SIMPLS, PLS-SVD, OPLS, and linear,
-radial-basis, or polynomial kernel PLS. Classification uses argmax or pooled-
+supports `single` and `double` execution for the fastPLS SIMPLS-family
+estimator, PLS-SVD, OPLS, and linear, radial-basis, or polynomial kernel PLS.
+The public `Method="simpls"` name may use a bounded candidate block; that route
+is not unqualified classical de Jong SIMPLS. Classification uses argmax or pooled-
 covariance LDA prediction heads.
 
 The core snapshot is pinned in `UPSTREAM_CORE.json`. Run
@@ -86,6 +88,15 @@ benchmark_cifar100('/path/to/cifar100/binaries', 7)
 Version 0.2.0 validates the shared CPU core. CUDA and Metal requests fail
 explicitly rather than silently falling back to CPU. MATLAB accelerator
 adapters are not part of this release.
+
+## Related repositories
+
+- [`fastPLS`](https://github.com/tkcaccia/fastPLS): R package and canonical
+  MIT-licensed C++ core.
+- [`fastPLS-extra`](https://github.com/tkcaccia/fastPLS-extra): publication
+  benchmarks, validation workflows, figures, and tables.
+- [`fastPLS-py`](https://github.com/tkcaccia/fastPLS-py): Python interface to
+  the same C++ core.
 
 ## License
 

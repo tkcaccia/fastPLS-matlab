@@ -190,6 +190,21 @@ using ModelVariant = std::variant<
     core::SimplsModel<T>, core::PlssvdModel<T>,
     core::OplsModel<T>, core::KernelPlsModel<T>>;
 
+template<class T>
+std::size_t fitted_component_count(
+    Family family, const ModelVariant<T>& model) {
+  if (family == Family::simpls) {
+    return std::get<core::SimplsModel<T>>(model).completed_components;
+  }
+  if (family == Family::plssvd) {
+    return std::get<core::PlssvdModel<T>>(model).completed_components;
+  }
+  if (family == Family::opls) {
+    return std::get<core::OplsModel<T>>(model).inner.completed_components;
+  }
+  return std::get<core::KernelPlsModel<T>>(model).inner.completed_components;
+}
+
 class ModelBase {
  public:
   virtual ~ModelBase() = default;
@@ -345,6 +360,9 @@ class Model final : public ModelBase {
 
  private:
   core::Matrix<T> latent_scores(core::Matrix<T> predictors) const {
+    if (components_ == 0) {
+      return core::Matrix<T>(predictors.rows(), 0);
+    }
     NativeBackend<T> backend;
     if (family_ == Family::simpls || family_ == Family::plssvd) {
       standardize(predictors, predictor_center_, predictor_scale_);
@@ -396,6 +414,15 @@ class Model final : public ModelBase {
   core::Matrix<T> predict_response(core::Matrix<T> predictors) const {
     NativeBackend<T> backend;
     if (family_ == Family::simpls) {
+      if (components_ == 0) {
+        core::Matrix<T> output(predictors.rows(), response_mean_.size());
+        for (std::size_t column = 0; column < output.columns(); ++column) {
+          for (std::size_t row = 0; row < output.rows(); ++row) {
+            output(row, column) = response_mean_[column];
+          }
+        }
+        return output;
+      }
       standardize(predictors, predictor_center_, predictor_scale_);
       auto output = core::predict_simpls_preprocessed<T>(
           predictors.view(), std::get<core::SimplsModel<T>>(model_),
@@ -584,9 +611,14 @@ std::unique_ptr<ModelBase> fit_typed(
         const auto& weights = family == Family::simpls ?
             std::get<core::SimplsModel<T>>(fitted).weights :
             std::get<core::PlssvdModel<T>>(fitted).weights;
-        model_scores.resize(n, components);
-        backend.gemm(standardized.view(), weights.view(), false, false,
-                     model_scores.view());
+        const std::size_t retained = fitted_component_count(family, fitted);
+        model_scores.resize(n, retained);
+        if (retained > 0) {
+          const core::ConstMatrixView<T> retained_weights(
+              weights.data(), weights.rows(), retained, weights.rows());
+          backend.gemm(standardized.view(), retained_weights, false, false,
+                       model_scores.view());
+        }
       }
     }
   } else {
@@ -614,8 +646,11 @@ std::unique_ptr<ModelBase> fit_typed(
     }
   }
 
+  const std::size_t fitted_components =
+      fitted_component_count(family, fitted);
+
   core::LdaModel<T> lda;
-  if (head == Head::lda) {
+  if (head == Head::lda && fitted_components > 0) {
     const core::Matrix<T>* score_gram = nullptr;
     const core::Matrix<T>* score_matrix = nullptr;
     if (family == Family::simpls) {
@@ -631,25 +666,29 @@ std::unique_ptr<ModelBase> fit_typed(
       score_gram = &std::get<core::KernelPlsModel<T>>(fitted).inner.score_gram;
       score_matrix = &std::get<core::KernelPlsModel<T>>(fitted).inner.scores;
     }
-    core::Matrix<T> class_sums(classes, components);
+    core::Matrix<T> class_sums(classes, fitted_components);
     std::vector<T> counts(classes, T(0));
     if (class_predictor_sums.size() != 0) {
       const auto& projection = family == Family::simpls ?
           std::get<core::SimplsModel<T>>(fitted).weights :
           std::get<core::PlssvdModel<T>>(fitted).weights;
-      backend.gemm(class_predictor_sums.view(), projection.view(), true, false,
-                   class_sums.view());
+      const core::ConstMatrixView<T> retained_projection(
+          projection.data(), projection.rows(), fitted_components,
+          projection.rows());
+      backend.gemm(class_predictor_sums.view(), retained_projection,
+                   true, false, class_sums.view());
       counts = class_counts;
     } else {
       for (std::size_t row = 0; row < n; ++row) {
         const std::size_t label = static_cast<std::size_t>(labels[row] - 1);
         counts[label] += T(1);
-        for (std::size_t component = 0; component < components; ++component) {
+        for (std::size_t component = 0;
+             component < fitted_components; ++component) {
           class_sums(label, component) += (*score_matrix)(row, component);
         }
       }
     }
-    const int count = static_cast<int>(components);
+    const int count = static_cast<int>(fitted_components);
     auto models = core::train_lda_prefixes_from_moments<T>(
         score_gram->view(), class_sums.view(), counts.data(), counts.size(),
         n, &count, 1, backend);
@@ -663,10 +702,18 @@ std::unique_ptr<ModelBase> fit_typed(
     const auto& projection = family == Family::simpls ?
         std::get<core::SimplsModel<T>>(fitted).weights :
         std::get<core::PlssvdModel<T>>(fitted).weights;
-    core::Matrix<T> latent(components, classes);
-    if (head == Head::lda) {
+    core::Matrix<T> latent(fitted_components, classes);
+    if (fitted_components == 0) {
+      direct_offsets.resize(classes);
       for (std::size_t category = 0; category < classes; ++category) {
-        for (std::size_t component = 0; component < components; ++component) {
+        const T prior = response_mean[category];
+        direct_offsets[category] = head == Head::lda ?
+            std::log(std::max(prior, std::numeric_limits<T>::min())) : prior;
+      }
+    } else if (head == Head::lda) {
+      for (std::size_t category = 0; category < classes; ++category) {
+        for (std::size_t component = 0;
+             component < fitted_components; ++component) {
           latent(component, category) = lda.linear(category, component);
         }
       }
@@ -674,7 +721,8 @@ std::unique_ptr<ModelBase> fit_typed(
     } else if (family == Family::simpls) {
       const auto& loadings = std::get<core::SimplsModel<T>>(fitted).response_loadings;
       for (std::size_t category = 0; category < classes; ++category) {
-        for (std::size_t component = 0; component < components; ++component) {
+        for (std::size_t component = 0;
+             component < fitted_components; ++component) {
           latent(component, category) = loadings(category, component);
         }
       }
@@ -684,7 +732,13 @@ std::unique_ptr<ModelBase> fit_typed(
       direct_offsets = response_mean;
     }
     direct_weights.resize(p, classes);
-    backend.gemm(projection.view(), latent.view(), false, false, direct_weights.view());
+    if (fitted_components > 0) {
+      const core::ConstMatrixView<T> retained_projection(
+          projection.data(), projection.rows(), fitted_components,
+          projection.rows());
+      backend.gemm(retained_projection, latent.view(), false, false,
+                   direct_weights.view());
+    }
     for (std::size_t predictor = 0; predictor < p; ++predictor) {
       const T inverse = T(1) / scale[predictor];
       const T centered = center[predictor] * inverse;
@@ -697,7 +751,8 @@ std::unique_ptr<ModelBase> fit_typed(
   }
 
   return std::make_unique<Model<T>>(
-      family, head, components, classes, std::move(fitted), std::move(center),
+      family, head, fitted_components, classes, std::move(fitted),
+      std::move(center),
       std::move(scale), std::move(response_mean), std::move(lda),
       std::move(direct_weights), std::move(direct_offsets));
 }

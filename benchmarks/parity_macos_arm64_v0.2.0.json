@@ -1,0 +1,40 @@
+{
+  "fastPLSRVersion": "0.3",
+  "coreCommit": "91811067223ee9b440e8269b6d6957869a0c04b0",
+  "repetitions": 3,
+  "precision": "double",
+  "records": [
+    {
+      "method": "simpls",
+      "maxAbsPredictionDifference": 2.9143354396410359E-16,
+      "relativePredictionError": 2.5248717741524845E-15,
+      "classificationAgreement": 1,
+      "matlabMedianSeconds": 0.005569125,
+      "rSeconds": 0.012000000000000011
+    },
+    {
+      "method": "plssvd",
+      "maxAbsPredictionDifference": 4.9092674370143641E-16,
+      "relativePredictionError": 5.0013125333952506E-15,
+      "classificationAgreement": 1,
+      "matlabMedianSeconds": 0.0057346666666666666,
+      "rSeconds": 0.010000000000000009
+    },
+    {
+      "method": "opls",
+      "maxAbsPredictionDifference": 4.1286418728248009E-16,
+      "relativePredictionError": 3.7258112089472488E-15,
+      "classificationAgreement": 1,
+      "matlabMedianSeconds": 0.0067845,
+      "rSeconds": 0.030999999999999917
+    },
+    {
+      "method": "kernelpls",
+      "maxAbsPredictionDifference": 7.6327832942979512E-17,
+      "relativePredictionError": 1.6720754227131252E-15,
+      "classificationAgreement": 1,
+      "matlabMedianSeconds": 0.052345291666666668,
+      "rSeconds": 0.29899999999999993
+    }
+  ]
+}
