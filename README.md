@@ -37,7 +37,8 @@ prediction = model.predict(X(151:end, :));
 metrics = fastpls.evaluate(y(151:end), prediction);
 ```
 
-For classification, set `Classifier="argmax"` or `Classifier="lda"`. Numeric
+Categorical and string responses use `Classifier="lda"` by default; set
+`Classifier="argmax"` to use PLS-DA response-score decoding instead. Numeric
 responses are treated as regression unless a classifier is requested explicitly.
 `model.predict(X, Top=5)` returns five ranked labels per observation.
 
@@ -85,9 +86,10 @@ benchmark_cifar100('/path/to/cifar100/binaries', 7)
 
 ## Backend status
 
-Version 0.2.0 validates the shared CPU core. CUDA and Metal requests fail
-explicitly rather than silently falling back to CPU. MATLAB accelerator
-adapters are not part of this release.
+Version 0.3.0 validates the shared CPU core. CUDA and Metal requests fail
+explicitly rather than silently falling back to CPU. `fastpls.cudaInfo()`
+reports this distribution as CUDA-unavailable and confirms that CPU fallback
+is disabled. MATLAB accelerator adapters are not part of this release.
 
 ## Related repositories
 

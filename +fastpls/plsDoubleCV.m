@@ -188,7 +188,7 @@ end
 
 function model = makeModel(component, options, classification, predictors, seed)
 classifier = string(options.Classifier);
-if classification && strlength(classifier) == 0, classifier = "argmax"; end
+if classification && strlength(classifier) == 0, classifier = "lda"; end
 gamma = options.Gamma;
 if isempty(gamma), gamma = 1 / predictors; end
 model = fastpls.Model( ...

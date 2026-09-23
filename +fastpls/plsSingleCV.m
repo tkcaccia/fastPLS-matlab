@@ -38,7 +38,7 @@ if classification
     Ydata = string(Ydata(:));
     classes = unique(Ydata, "stable");
     classifier = string(options.Classifier);
-    if strlength(classifier) == 0, classifier = "argmax"; end
+    if strlength(classifier) == 0, classifier = "lda"; end
 else
     Ydata = cast(numericMatrix(Ydata, "Ydata"), "like", Xdata);
     classes = strings(0, 1);

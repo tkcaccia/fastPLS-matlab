@@ -39,6 +39,18 @@ catch error
     failed = contains(error.identifier, "UnavailableBackend");
 end
 assert(failed, "An unavailable backend did not fail explicitly.");
+cuda = fastpls.cudaInfo();
+assert(cuda.Status == "unavailable" && ~cuda.Compiled && ...
+    ~cuda.Available && ~cuda.DiagnosticOnly && cuda.DeviceCount == 0 && ...
+    ismissing(cuda.RuntimeVersion) && ismissing(cuda.DriverVersion) && ...
+    cuda.NoCpuFallback);
+defaultClassification = fastpls.Model(NumComponents=2, Seed=31);
+defaultClassification.fit(X(1:90, :), labels(1:90));
+explicitClassification = fastpls.Model( ...
+    NumComponents=2, Classifier="lda", Seed=31);
+explicitClassification.fit(X(1:90, :), labels(1:90));
+assert(all(defaultClassification.predict(X(91:end, :)) == ...
+    explicitClassification.predict(X(91:end, :))));
 metrics = fastpls.evaluate(Y, Y);
 assert(abs(metrics.R2 - 1) < eps && metrics.RMSD == 0);
 integerRegression = fastpls.evaluate([1; 2; 3], [1; 2; 3]);

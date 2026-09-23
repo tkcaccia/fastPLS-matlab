@@ -1,10 +1,10 @@
-# Validation record for fastPLS-matlab 0.2.0
+# Validation record for fastPLS-matlab 0.3.0
 
 ## Evaluated source
 
-- Wrapper version: 0.2.0
+- Wrapper version: 0.3.0
 - Shared fastPLS R core version: 0.3
-- Shared core commit: `91811067223ee9b440e8269b6d6957869a0c04b0`
+- Shared core commit: `82bbc48a0d69e4bd0d7c261fdcc8e636694133b1`
 - Platform: macOS arm64
 - MATLAB: R2026a
 - CPU linear algebra: Apple Accelerate
@@ -14,13 +14,18 @@ recorded R source.
 
 ## Automated tests
 
-The MEX module compiled successfully. `tests/run_tests.m` passed all tests, and
-MATLAB Code Analyzer reported zero findings. Coverage includes all four PLS
+The 0.2.0 MEX module compiled successfully. `tests/run_tests.m` passed all
+tests, and MATLAB Code Analyzer reported zero findings. Coverage includes all four PLS
 families, single and double precision, regression, argmax and LDA
 classification, ranked prediction, independent-test evaluation, single and
 nested cross-validation, grouped permutation testing, rSVD, correlation, and
 VIP output. The suite also verifies intercept-only prediction and effective
 component diagnostics when a SIMPLS-family fit has zero effective directions.
+For 0.3.0, the vendored numerical headers remain byte-for-byte identical to
+the upstream core and the native MEX source is unchanged. The wrapper adds
+default LDA classification and explicit CUDA-unavailable metadata. MATLAB
+R2026a did not complete noninteractive startup in the current validation
+session, so a fresh 0.3.0 MEX runtime pass is not claimed here.
 
 ## R interface agreement
 
@@ -42,6 +47,6 @@ validation on other operating systems.
 ## Current limitations
 
 The MATLAB package exposes the complete portable CPU workflow. CUDA and Metal
-adapters are not included in version 0.2.0; requesting either backend fails
-explicitly rather than changing to CPU. The interface is tested with MATLAB
-R2026a. GNU Octave compatibility is not claimed.
+adapters are not included in version 0.3.0; requesting either backend fails
+explicitly rather than changing to CPU. The previous runtime validation used
+MATLAB R2026a. GNU Octave compatibility is not claimed.

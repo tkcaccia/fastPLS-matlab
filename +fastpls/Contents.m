@@ -13,3 +13,4 @@
 %   fastcor      - Pearson correlation between matrix columns.
 %   evaluate     - Classification or regression prediction metrics.
 %   backendInfo  - Compiled linear-algebra backend description.
+%   cudaInfo     - CUDA capability status for this distribution.

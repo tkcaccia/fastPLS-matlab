@@ -67,12 +67,19 @@ classdef Model < handle
             kernel = obj.textChoice(obj.Kernel, "Kernel", ...
                 ["linear", "rbf", "radial_basis", ...
                  "polynomial", "poly"]);
-            if strlength(string(obj.Classifier)) > 0
+            requestedClassifier = string(obj.Classifier);
+            classification = strlength(requestedClassifier) > 0 || ...
+                iscategorical(Y) || isstring(Y) || iscellstr(Y);
+            if classification
                 if ~isvector(Y), error("fastPLS:InvalidLabels", "Labels must be a vector."); end
                 [obj.Classes, ~, encoded] = unique(Y(:), "stable");
                 Ynative = int32(encoded - 1);
-                classifier = obj.textChoice(obj.Classifier, "Classifier", ...
-                    ["argmax", "lda"]);
+                if strlength(requestedClassifier) == 0
+                    classifier = "lda";
+                else
+                    classifier = obj.textChoice(requestedClassifier, ...
+                        "Classifier", ["argmax", "lda"]);
+                end
             else
                 obj.Classes = [];
                 Ynative = cast(obj.numericMatrix(Y, "Y"), "like", X);
